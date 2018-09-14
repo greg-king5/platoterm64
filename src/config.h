@@ -1,7 +1,7 @@
 /**
  * PLATOTerm64 - A PLATO Terminal for the Commodore 64
  * Based on Steve Peltz's PAD
- * 
+ *
  * Author: Thomas Cherryhomes <thom.cherryhomes at gmail dot com>
  *
  * config.h - Configuration routines
@@ -13,8 +13,14 @@
 #define IO_MODE_SERIAL        0
 #define IO_MODE_ETHERNET      1
 
+#if defined(__C64__)
+// This should be bigger than 256 (the size of the NMI buffer).
+#define XOFF_THRESHOLD 260
+#define XON_THRESHOLD (sizeof recv_buffer - 16)
+#else
 #define XON_THRESHOLD 46
 #define XOFF_THRESHOLD 127
+#endif
 
 /* C64/128 Driver defines */
 #define CONFIG_MOUSE_DRIVER_1351 "mou-1351"
@@ -53,6 +59,7 @@ typedef struct configInfo
   unsigned short xon_threshold;
   unsigned short xoff_threshold;
 } ConfigInfo;
+extern ConfigInfo config;
 
 /**
  * config_init()

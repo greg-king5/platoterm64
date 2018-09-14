@@ -1,7 +1,7 @@
 /**
  * PLATOTerm64 - A PLATO Terminal for the Commodore 64
  * Based on Steve Peltz's PAD
- * 
+ *
  * Author: Thomas Cherryhomes <thom.cherryhomes at gmail dot com>
  *
  * prefs.c - Preferences menu functions
@@ -93,10 +93,7 @@ void prefs_run(void)
     {
       prefs_update();
     }
-  
-  TTY=TTYSave;
-  TTYLoc.x=TTYLocSave.x;
-  TTYLoc.y=TTYLocSave.y;
+
   prefs_done();
 }
 
@@ -140,7 +137,6 @@ void prefs_serial(void)
       prefs_running=false;
       break;
     }
-  
 }
 
 /**
@@ -213,8 +209,8 @@ void prefs_save(void)
   prefs_select("ok");
 #ifdef __ATARI__
   io_open();
-#endif
   prefs_clear();
+#endif
 }
 
 /**
@@ -224,7 +220,7 @@ void prefs_save(void)
 void prefs_baud(void)
 {
   prefs_display("3)00 1)200 2)400 9)600 q)19200 w)38400 b)ack: ");
-  
+
   ch=prefs_get_key_matching("3129qwbQWB");
 
   switch(ch)
@@ -338,7 +334,7 @@ void prefs_interface(void)
 /* void prefs_get_address(void) */
 /* { */
 /*   unsigned char strp=0; */
-  
+
 /*   ch=0; */
 
 /*   while (ch != 0x0d) */
@@ -471,23 +467,26 @@ void prefs_interface(void)
 /**
  * prefs_display(text)
  * Display a line of the preferences menu
- * This routine contains some ifdefs to work around the fact that the commodore targets
+ * This routine contains #ifndefs to work around the fact that the Commodore targets
  * for CC65 remap ASCII passed in character strings.
  */
 void prefs_display(const char* text)
 {
   uint8_t c;
-#if !defined(__C64__) || !defined(__C128__)
+#ifndef __CBM__
   unsigned char* capped_text;
 #endif
+
+  prefs_clear();
+
   TTYLoc.x=0;
   TTYLoc.y=1;
-  
+
   c=tgi_getcolor();
   tgi_setcolor(TGI_COLOR_WHITE);
-#if !defined(__C64__) || !defined(__C128__)
-  capped_text=strupr((unsigned char* )text);
-  ShowPLATO((unsigned char*)capped_text, strlen(text));
+#ifndef __CBM__
+  capped_text=(unsigned char*)strupr((char*)text);
+  ShowPLATO(capped_text, strlen(text));
 #else
   ShowPLATO((unsigned char*)text, strlen(text));
 #endif
@@ -501,7 +500,7 @@ unsigned char prefs_get_key_matching(const char* matches)
 {
   unsigned char ch;
   unsigned char i;
-  
+
   while (true)
     {
       ch=tolower(cgetc());
@@ -552,20 +551,19 @@ void prefs_clear(void)
 }
 
 /**
- * indicate selection, display it, and wait a bit for visual confirmation.
+ * Display selection, and wait a bit, as visual confirmation.
  */
 void prefs_select(const char* text)
 {
   unsigned char i=0;
+
   ShowPLATO((unsigned char *)text,strlen(text));
-  
+
   for (i=0;i<100;i++)
     {
       screen_wait();
     }
-
   prefs_clear();
-
 }
 
 /**
@@ -575,72 +573,65 @@ void prefs_update(void)
 {
   unsigned char retv;
 
-  if (io_prefs_updated==true)
+  // Remove the I/O driver first, so that we might have
+  // an empty heap when loading the new drivers.
+  if (io_prefs_updated)
     {
-      // Close any serial drivers.
-      prefs_clear();
-      prefs_display("closing serial driver...");
-      ser_close();
-      prefs_clear();
-      prefs_display("unloading serial driver...");
-#if defined(__C64__)
-      // This is a workaround because I suspect up2400 incorrectly unloads itself.
-      ser_uninstall();
-#endif
-      ser_unload();
-      prefs_clear();
+      switch (config.io_mode)
+	{
+	case IO_MODE_SERIAL:
+	  prefs_display("closing serial driver...");
+	  ser_close();
+	  prefs_display("unloading serial driver...");
+	  ser_unload();
+	  break;
+     /* // Come back here and implement ethernet-specific stuff. */
+     /* case IO_MODE_ETHERNET: */
+     /*   prefs_display("ethernet not implemented, yet."); */
+     /*   prefs_select(""); */
+	}
     }
 
-  prefs_clear();
-  
-  if (touch_prefs_updated==true)
+  if (touch_prefs_updated)
     {
-      // Close any touch drivers
+      // Change the "touch" driver.
       prefs_display("unloading touch driver...");
       mouse_unload();
-      prefs_clear();
+
+      if (strcmp(config.driver_mou,"NONE")!=0)
+	{
+	  prefs_display("loading touch driver...");
+	  config_init_hook(); // Do any special re-initialization.
+	  retv = mouse_load_driver(&mouse_def_callbacks,config.driver_mou);
+	  if (retv==MOUSE_ERR_OK)
+	    {
+	      prefs_select("ok");
+	      mouse_show();
+	    }
+	  else
+	    {
+	      prefs_select("error");
+	    }
+	}
     }
 
-  if (io_prefs_updated==true && config.io_mode == IO_MODE_SERIAL)
+  if (io_prefs_updated)
     {
-      prefs_display("loading serial driver...");
-      config_init_hook(); // Do any special re-initalization.
-      ser_load_driver(config.driver_ser);
-      
-      io_init_funcptrs();
-      io_open();
-      prefs_clear();
-    }  
-  /* else if (io_prefs_updated==true && config.io_mode == IO_MODE_ETHERNET) */
-  /*   { */
-  /*     // Come back here and implement ethernet specific stuff */
-  /*     prefs_display("ethernet not implemented, yet."); */
-  /*     prefs_select(""); */
-  /*     prefs_clear(); */
-  /*   } */
-
-  prefs_clear();
-  
-  if (touch_prefs_updated==true && strcpy(config.driver_mou,"NONE")!=0)
-    {
-      prefs_clear();
-      prefs_display("loading touch driver...");
-      config_init_hook();
-      retv = mouse_load_driver(&mouse_def_callbacks,config.driver_mou);
-      if (retv==MOUSE_ERR_OK)
+      switch (config.io_mode)
 	{
-	  prefs_select("ok");
-	  mouse_show();
-	}
-      else
-	{
-	  prefs_select("error");
+	case IO_MODE_SERIAL:
+	  io_init();
+	  break;
+     /* // Come back here and implement ethernet-specific stuff. */
+     /* case IO_MODE_ETHERNET: */
+     /*   prefs_display("ethernet not implemented, yet."); */
+     /*   prefs_select(""); */
 	}
     }
 }
 
 /**
- * close prefs. 
+ * close prefs.
  */
 void prefs_done(void)
 {
